@@ -282,7 +282,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                     return !isCCW(start_coord, each, end_coord);
                 });
 
-                const auto rightmost = next->intersection[1];
+                const auto rightmost = next->intersection.getRightmostRoad();
                 deviation_from_straight = angularDeviation(rightmost.angle, STRAIGHT_ANGLE);
             }
             else if (is_left_turn)
@@ -291,7 +291,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                     return isCCW(start_coord, each, end_coord);
                 });
 
-                const auto leftmost = next->intersection.back();
+                const auto leftmost = next->intersection.getLeftmostRoad();
                 deviation_from_straight = angularDeviation(leftmost.angle, STRAIGHT_ANGLE);
             }
 

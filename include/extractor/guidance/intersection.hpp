@@ -93,6 +93,18 @@ struct Intersection final : public std::vector<ConnectedRoad>
     // given all possible turns, which is the highest connected number of lanes per turn. This value
     // is used, for example, during generation of intersections.
     std::uint8_t getHighestConnectedLaneCount(const util::NodeBasedDynamicGraph &) const;
+
+    // Returns the UTurn road we took to arrive at this intersection.
+    ConnectedRoad &getUTurnRoad();
+    const ConnectedRoad &getUTurnRoad() const;
+
+    // Returns the right-most road at this intersection.
+    ConnectedRoad &getRightmostRoad();
+    const ConnectedRoad &getRightmostRoad() const;
+
+    // Returns the left-most road at this intersection.
+    ConnectedRoad &getLeftmostRoad();
+    const ConnectedRoad &getLeftmostRoad() const;
 };
 
 Intersection::const_iterator findClosestTurn(const Intersection &intersection, const double angle);
