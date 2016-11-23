@@ -76,10 +76,16 @@ class SliproadHandler final : public IntersectionHandler
     bool roadContinues(const EdgeID current, const EdgeID next) const;
 
     // Is the area under the triangle a valid Sliproad triangle
-    bool isValidSliproadArea(const NodeID, const NodeID, const NodeID) const;
+    bool isValidSliproadArea(const double max_area, const NodeID, const NodeID, const NodeID) const;
 
     // Could a Sliproad reach this intersection?
     static bool canBeTargetOfSliproad(const Intersection &intersection);
+
+    // Scales a threshold based on the underlying road classification.
+    // Example: a 100 m threshold for a highway if different on living streets.
+    // The return value is guaranteed to not be larger than `threshold`.
+    static double scaledThresholdByRoadClass(const double max_threshold,
+                                             const RoadClassification &classification);
 };
 
 } // namespace guidance

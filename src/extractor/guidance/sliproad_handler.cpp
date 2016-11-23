@@ -5,6 +5,8 @@
 #include "util/coordinate_calculation.hpp"
 #include "util/guidance/toolkit.hpp"
 
+#include <cmath>
+
 #include <algorithm>
 #include <iterator>
 #include <limits>
@@ -299,7 +301,6 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
 
             const auto length = haversineDistance(node_info_list[intersection_node_id], //
                                                   node_info_list[next->node]);
-            BOOST_ASSERT(length <= MAX_SLIPROAD_THRESHOLD);
 
             const double perpendicular_angle = 90 + FUZZY_ANGLE_DIFFERENCE;
 
@@ -321,7 +322,12 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         //           `  .
         //              d
         //
-        if (!isValidSliproadArea(intersection_node_id, next->node, sliproad_edge_target))
+        const auto area_threshold = std::pow(
+            scaledThresholdByRoadClass(MAX_SLIPROAD_THRESHOLD, sliproad_data.road_classification),
+            2.);
+
+        if (!isValidSliproadArea(
+                area_threshold, intersection_node_id, next->node, sliproad_edge_target))
         {
             continue;
         }
@@ -510,18 +516,25 @@ bool SliproadHandler::nextIntersectionIsTooFarAway(const NodeID start, const Edg
 
     // TODO: refactor, could be useful for other scenarios, too
 
+    // Base max distance threshold on the current road class we're on
+    const auto &data = node_based_graph.GetEdgeData(onto);
+    const auto threshold = scaledThresholdByRoadClass(MAX_SLIPROAD_THRESHOLD, // <- scales down
+                                                      data.road_classification);
+
     struct NextIntersectionDistanceAccumulator
     {
         NextIntersectionDistanceAccumulator(
             const extractor::guidance::CoordinateExtractor &extractor_,
-            const util::NodeBasedDynamicGraph &graph_)
-            : extractor{extractor_}, graph{graph_}, too_far_away{false}, distance{0}
+            const util::NodeBasedDynamicGraph &graph_,
+            const double threshold)
+            : extractor{extractor_}, graph{graph_}, threshold{threshold}, too_far_away{false},
+              distance{0}
         {
         }
 
         bool terminate()
         {
-            if (distance > MAX_SLIPROAD_THRESHOLD)
+            if (distance > threshold)
             {
                 too_far_away = true;
                 return true;
@@ -540,9 +553,10 @@ bool SliproadHandler::nextIntersectionIsTooFarAway(const NodeID start, const Edg
 
         const extractor::guidance::CoordinateExtractor &extractor;
         const util::NodeBasedDynamicGraph &graph;
+        const double threshold;
         bool too_far_away;
         double distance;
-    } accumulator{extractor, node_based_graph};
+    } accumulator{extractor, node_based_graph, threshold};
 
     struct /*TrafficSignalBarrierRoadSelector*/
     {
@@ -606,7 +620,10 @@ bool SliproadHandler::roadContinues(const EdgeID current, const EdgeID next) con
     return continues;
 }
 
-bool SliproadHandler::isValidSliproadArea(const NodeID a, const NodeID b, const NodeID c) const
+bool SliproadHandler::isValidSliproadArea(const double max_area,
+                                          const NodeID a,
+                                          const NodeID b,
+                                          const NodeID c) const
 
 {
     using namespace util::coordinate_calculation;
@@ -624,7 +641,7 @@ bool SliproadHandler::isValidSliproadArea(const NodeID a, const NodeID b, const 
     // nodes are really close to each other and / or tagging ist just plain off.
     const constexpr auto MIN_SLIPROAD_AREA = 3.;
 
-    if (area < MIN_SLIPROAD_AREA || area > MAX_SLIPROAD_THRESHOLD * MAX_SLIPROAD_THRESHOLD)
+    if (area < MIN_SLIPROAD_AREA || area > max_area)
         return false;
 
     return true;
@@ -653,6 +670,54 @@ bool SliproadHandler::canBeTargetOfSliproad(const Intersection &intersection)
         return false;
 
     return true;
+}
+
+double SliproadHandler::scaledThresholdByRoadClass(const double max_threshold,
+                                                   const RoadClassification &classification)
+{
+    double factor = 1.0;
+
+    switch (classification.GetPriority())
+    {
+    case RoadPriorityClass::MOTORWAY:
+        factor = 1.0;
+        break;
+    case RoadPriorityClass::TRUNK:
+        factor = 0.8;
+        break;
+    case RoadPriorityClass::PRIMARY:
+        factor = 0.8;
+        break;
+    case RoadPriorityClass::SECONDARY:
+        factor = 0.6;
+        break;
+    case RoadPriorityClass::TERTIARY:
+        factor = 0.5;
+        break;
+    case RoadPriorityClass::MAIN_RESIDENTIAL:
+        factor = 0.4;
+        break;
+    case RoadPriorityClass::SIDE_RESIDENTIAL:
+        factor = 0.3;
+        break;
+    case RoadPriorityClass::LINK_ROAD:
+        factor = 0.3;
+        break;
+    case RoadPriorityClass::CONNECTIVITY:
+        factor = 0.1;
+        break;
+
+    // What
+    case RoadPriorityClass::BIKE_PATH:
+    case RoadPriorityClass::FOOT_PATH:
+    default:
+        factor = 0.1;
+    }
+
+    const auto scaled = max_threshold * factor;
+
+    BOOST_ASSERT(scaled <= max_threshold);
+    return scaled;
 }
 
 } // namespace guidance
