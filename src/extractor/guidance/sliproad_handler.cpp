@@ -272,20 +272,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
 
             // In addition, if it's a right/left turn we expect the rightmost/leftmost
             // turn at `c` to be more or less ~90 degree for a Sliproad scenario.
-            // We scale the 90 degrees to handle skewed small Sliproads scenarios.
-            auto is_perpendicular_turn = false;
-
-            const auto length = haversineDistance(node_info_list[intersection_node_id], //
-                                                  node_info_list[next->node]);
-            BOOST_ASSERT(length <= MAX_SLIPROAD_THRESHOLD);
-
-            const double scale = length / MAX_SLIPROAD_THRESHOLD;
-            BOOST_ASSERT(scale >= 0 && scale <= 1);
-
-            // If we're at max distance we require a ~90 degree angle.
-            // Below we linearly scale the required angle to account for small skewed scenarios.
-            // TODO: 90+90+20 is probably too high
-            double perpendicular_angle = 90 + (1.0 - scale) * 90 + FUZZY_ANGLE_DIFFERENCE;
+            double deviation_from_straight = 0;
 
             if (is_right_turn)
             {
@@ -294,8 +281,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                 });
 
                 const auto rightmost = next->intersection[1];
-                is_perpendicular_turn = angularDeviation(rightmost.angle, STRAIGHT_ANGLE) <= //
-                                        perpendicular_angle;                                 //
+                deviation_from_straight = angularDeviation(rightmost.angle, STRAIGHT_ANGLE);
             }
             else if (is_left_turn)
             {
@@ -304,12 +290,27 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                 });
 
                 const auto leftmost = next->intersection.back();
-                is_perpendicular_turn = angularDeviation(leftmost.angle, STRAIGHT_ANGLE) <= //
-                                        perpendicular_angle;                                //
+                deviation_from_straight = angularDeviation(leftmost.angle, STRAIGHT_ANGLE);
             }
 
-            if (!snuggles || !is_perpendicular_turn)
-                continue;
+            // The data modelling for small Sliproads is not reliable enough.
+            // Only check for curvature and ~90 degree when it makes sense to do so.
+            const constexpr auto MIN_LENGTH = 3.;
+
+            const auto length = haversineDistance(node_info_list[intersection_node_id], //
+                                                  node_info_list[next->node]);
+            BOOST_ASSERT(length <= MAX_SLIPROAD_THRESHOLD);
+
+            const double perpendicular_angle = 90 + FUZZY_ANGLE_DIFFERENCE;
+
+            if (length >= MIN_LENGTH)
+            {
+                if (!snuggles)
+                    continue;
+
+                if (deviation_from_straight > perpendicular_angle)
+                    continue;
+            }
         }
 
         // Check for area under triangle `bdc`.
