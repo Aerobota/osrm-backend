@@ -14,8 +14,6 @@
 
 #include <boost/assert.hpp>
 
-using EdgeData = osrm::util::NodeBasedDynamicGraph::EdgeData;
-using osrm::util::guidance::getTurnDirection;
 using osrm::util::guidance::angularDeviation;
 
 namespace osrm
@@ -352,6 +350,10 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
             if (candidate_road_name_mismatch)
                 continue;
 
+            // If the Sliproad `bd` is a link, `bc` and `cd` must not be links.
+            if (!isValidSliproadLink(sliproad, next_road, candidate_road))
+                continue;
+
             if (node_based_graph.GetTarget(candidate_road.eid) == next->node)
             {
                 sliproad.instruction.type = TurnType::Sliproad;
@@ -389,6 +391,8 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                                                                       next_data.name_id,
                                                                       name_table,
                                                                       street_name_suffix_table); //
+
+        using osrm::util::guidance::getTurnDirection;
 
         if (same_name)
         {
@@ -642,6 +646,28 @@ bool SliproadHandler::isValidSliproadArea(const double max_area,
     const constexpr auto MIN_SLIPROAD_AREA = 3.;
 
     if (area < MIN_SLIPROAD_AREA || area > max_area)
+        return false;
+
+    return true;
+}
+
+bool SliproadHandler::isValidSliproadLink(const ConnectedRoad &sliproad,
+                                          const ConnectedRoad &first,
+                                          const ConnectedRoad &second) const
+{
+    // If the Sliproad is not a link we don't care
+    const auto sliproad_data = node_based_graph.GetEdgeData(sliproad.eid);
+    if (!sliproad_data.road_classification.IsLinkClass())
+        return true;
+
+    // otherwise neither the first road leading to the intersection we shortcut
+    const auto first_road_data = node_based_graph.GetEdgeData(first.eid);
+    if (first_road_data.road_classification.IsLinkClass())
+        return false;
+
+    // not the second road coming from the intersection we shotcut must be links
+    const auto second_road_data = node_based_graph.GetEdgeData(second.eid);
+    if (second_road_data.road_classification.IsLinkClass())
         return false;
 
     return true;

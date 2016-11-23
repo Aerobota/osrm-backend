@@ -78,6 +78,11 @@ class SliproadHandler final : public IntersectionHandler
     // Is the area under the triangle a valid Sliproad triangle
     bool isValidSliproadArea(const double max_area, const NodeID, const NodeID, const NodeID) const;
 
+    // Is the Sliproad a link the both roads it shortcuts must not be links
+    bool isValidSliproadLink(const ConnectedRoad &sliproad,
+                             const ConnectedRoad &first,
+                             const ConnectedRoad &second) const;
+
     // Could a Sliproad reach this intersection?
     static bool canBeTargetOfSliproad(const Intersection &intersection);
 
